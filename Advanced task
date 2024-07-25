@@ -1,0 +1,149 @@
+FORNTEND 
+APP.JS
+
+import React from 'react';
+import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import Home from './pages/Home';
+import Restaurant from './pages/Restaurant';
+import Checkout from './pages/Checkout';
+import OrderTracking from './pages/OrderTracking';
+import Profile from './pages/Profile';
+import Header from './components/Header';
+import Footer from './components/Footer';
+
+function App() {
+  return (
+    <Router>
+      <Header />
+      <Switch>
+        <Route path="/" exact component={Home} />
+        <Route path="/restaurant/:id" component={Restaurant} />
+        <Route path="/checkout" component={Checkout} />
+        <Route path="/order-tracking/:orderId" component={OrderTracking} />
+        <Route path="/profile" component={Profile} />
+      </Switch>
+      <Footer />
+    </Router>
+  );
+}
+
+export default App;
+
+RESTAURNT.JS
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+const RestaurantList = ({ restaurants }) => {
+  return (
+    <div className="restaurant-list">
+      {restaurants.map((restaurant) => (
+        <div key={restaurant.id} className="restaurant-item">
+          <Link to={`/restaurant/${restaurant.id}`}>
+            <img src={restaurant.image} alt={restaurant.name} />
+            <h3>{restaurant.name}</h3>
+            <p>{restaurant.description}</p>
+            <p>Rating: {restaurant.rating}</p>
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default RestaurantList;
+
+BACKEND DEVELOPMENT
+SERVER.JS
+
+const express = require('express');
+const mongoose = require('mongoose');
+const config = require('./config');
+const authRoutes = require('./routes/authRoutes');
+const restaurantRoutes = require('./routes/restaurantRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const userRoutes = require('./routes/userRoutes');
+
+const app = express();
+const port = config.PORT;
+
+mongoose.connect(config.DB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error(err));
+
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/users', userRoutes);
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
+
+AUTHCONTROLLER.JS
+
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const config = require('../config');
+
+exports.register = async (req, res) => {
+  const { name, email, password } = req.body;
+  
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ name, email, password: hashedPassword });
+    await user.save();
+
+    const token = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: '1h' });
+    res.status(201).json({ token });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.login = async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign({ id: user._id }, config.JWT_SECRET, { expiresIn: '1h' });
+    res.status(200).json({ token });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+RESTAURANTCONTROLLER.JS
+
+const Restaurant = require('../models/Restaurant');
+
+exports.getAllRestaurants = async (req, res) => {
+  try {
+    const restaurants = await Restaurant.find();
+    res.status(200).json(restaurants);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getRestaurantById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const restaurant = await Restaurant.findById(id);
+    if (!restaurant) return res.status(404).json({ message: 'Restaurant not found' });
+
+    res.status(200).json(restaurant);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
